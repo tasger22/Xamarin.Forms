@@ -37,10 +37,19 @@ namespace Xamarin.Forms.Platform.Android
 		IOrderedTraversalController OrderedTraversalController => this;
 
 		double _previousHeight;
+		bool _isDisposed = false;
 
 		protected override void Dispose(bool disposing)
 		{
-			PageController?.SendDisappearing();
+			if (_isDisposed)
+				return;
+
+			if (disposing)
+			{
+				PageController?.SendDisappearing();
+			}
+
+			_isDisposed = true;
 			base.Dispose(disposing);
 		}
 
@@ -80,7 +89,7 @@ namespace Xamarin.Forms.Platform.Android
 		protected override void OnElementPropertyChanged(object sender, PropertyChangedEventArgs e)
 		{
 			base.OnElementPropertyChanged(sender, e);
-			if (e.PropertyName == Page.BackgroundImageProperty.PropertyName)
+			if (e.PropertyName == Page.BackgroundImageSourceProperty.PropertyName)
 				UpdateBackground(true);
 			else if (e.PropertyName == VisualElement.BackgroundColorProperty.PropertyName)
 				UpdateBackground(false);
@@ -118,23 +127,29 @@ namespace Xamarin.Forms.Platform.Android
 		{
 			Page page = Element;
 
-			string bkgndImage = page.BackgroundImage;
-			if (!string.IsNullOrEmpty(bkgndImage))
-				this.SetBackground(Context.GetDrawable(bkgndImage));
-			else
+			_ = this.ApplyDrawableAsync(page, Page.BackgroundImageSourceProperty, Context, drawable =>
 			{
-				Color bkgndColor = page.BackgroundColor;
-				bool isDefaultBkgndColor = bkgndColor.IsDefault;
-				if (page.Parent is BaseShellItem && isDefaultBkgndColor)
+				if (drawable != null)
 				{
-					var color = Forms.IsMarshmallowOrNewer ?
-						Context.Resources.GetColor(AColorRes.BackgroundLight, Context.Theme) :
-						new AColor(ContextCompat.GetColor(Context, global::Android.Resource.Color.BackgroundLight));
-					SetBackgroundColor(color);
+					this.SetBackground(drawable);
 				}
-				else if (!isDefaultBkgndColor || setBkndColorEvenWhenItsDefault)
-					SetBackgroundColor(bkgndColor.ToAndroid());
-			}
+				else
+				{
+					Color bkgndColor = page.BackgroundColor;
+					bool isDefaultBkgndColor = bkgndColor.IsDefault;
+					if (page.Parent is BaseShellItem && isDefaultBkgndColor)
+					{
+						var color = Forms.IsMarshmallowOrNewer ?
+							Context.Resources.GetColor(AColorRes.BackgroundLight, Context.Theme) :
+							new AColor(ContextCompat.GetColor(Context, global::Android.Resource.Color.BackgroundLight));
+						SetBackgroundColor(color);
+					}
+					else if (!isDefaultBkgndColor || setBkndColorEvenWhenItsDefault)
+					{
+						SetBackgroundColor(bkgndColor.ToAndroid());
+					}
+				}
+			});
 		}
 
 		void IOrderedTraversalController.UpdateTraversalOrder()
@@ -149,7 +164,7 @@ namespace Xamarin.Forms.Platform.Android
 			if (!am.IsEnabled)
 				return;
 
-			SortedDictionary<int, List<VisualElement>> tabIndexes = null;
+			SortedDictionary<int, List<ITabStopElement>> tabIndexes = null;
 			foreach (var child in Element.LogicalChildren)
 			{
 				if (!(child is VisualElement ve))
